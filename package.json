@@ -10,7 +10,10 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
     "hardhat": "^2.22.17"
   },
   "dependencies": {
