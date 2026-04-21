@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CertVerifier DApp</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0c10;
+      --bg2:       #0f1218;
+      --bg3:       #161b24;
+      --border:    #1e2530;
+      --border2:   #2a3342;
+      --cyan:      #00e5ff;
+      --cyan-dim:  rgba(0,229,255,0.12);
+      --cyan-glow: rgba(0,229,255,0.25);
+      --green:     #00ff88;
+      --green-dim: rgba(0,255,136,0.1);
+      --red:       #ff4560;
+      --red-dim:   rgba(255,69,96,0.1);
+      --amber:     #ffb300;
+      --amber-dim: rgba(255,179,0,0.1);
+      --text:      #e2e8f0;
+      --text-dim:  #64748b;
+      --text-muted:#334155;
+      --radius:    14px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: 'Syne', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,229,255,0.06) 0%, transparent 60%),
+        linear-gradient(180deg, #0a0c10 0%, #080a0d 100%);
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    header {
+      background: rgba(10,12,16,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--cyan), #0080ff);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 16px rgba(0,229,255,0.3);
+    }
+
+    .logo-icon svg { width: 18px; height: 18px; fill: #0a0c10; }
+    .logo span { color: var(--cyan); }
+
+    .wallet-area { display: flex; align-items: center; gap: 10px; }
+
+    .network-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px; padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--amber-dim); color: var(--amber);
+      border: 1px solid rgba(255,179,0,0.2);
+      font-weight: 700; display: none;
+    }
+    .network-badge.visible { display: block; }
+
+    #connectBtn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 18px;
+      background: var(--cyan-dim); color: var(--cyan);
+      border: 1px solid rgba(0,229,255,0.3);
+      border-radius: var(--radius-sm);
+      font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
+    }
+    #connectBtn:hover { background: rgba(0,229,255,0.2); border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan-glow); }
+    #connectBtn.connected { background: var(--green-dim); color: var(--green); border-color: rgba(0,255,136,0.3); }
+
+    main { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    .stats-bar { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 2rem; animation: fadeUp 0.4s ease both; }
+
+    .stat-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem;
+      position: relative; overflow: hidden;
+    }
+    .stat-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0.4;
+    }
+
+    .stat-label { font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-dim); font-weight:700; margin-bottom:8px; }
+    .stat-value { font-family:'Space Mono',monospace; font-size:26px; font-weight:700; color:var(--cyan); }
+    .stat-sub { font-size:11px; color:var(--text-muted); margin-top:4px; }
+
+    .tabs {
+      display:flex; gap:4px;
+      background:var(--bg2); border:1px solid var(--border);
+      border-radius:var(--radius); padding:5px; margin-bottom:1.5rem;
+      animation: fadeUp 0.4s 0.1s ease both;
+    }
+
+    .tab-btn {
+      flex:1; padding:10px; border:none; border-radius:var(--radius-sm);
+      background:transparent; font-family:'Syne',sans-serif; font-size:13px; font-weight:700;
+      color:var(--text-dim); cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:7px;
+      transition:all 0.2s; letter-spacing:0.02em;
+    }
+    .tab-btn:hover { color:var(--text); }
+    .tab-btn.active { background:var(--cyan-dim); color:var(--cyan); border:1px solid rgba(0,229,255,0.2); }
+    .tab-btn svg { width:15px; height:15px; }
+
+    .panel { display:none; }
+    .panel.active { display:block; }
+
+    .card {
+      background:var(--bg2); border:1px solid var(--border);
+      border-radius:var(--radius); padding:1.75rem; margin-bottom:1.5rem;
+      animation: fadeUp 0.4s 0.15s ease both;
+    }
+
+    .card-title { font-size:17px; font-weight:800; color:var(--text); margin-bottom:4px; letter-spacing:-0.01em; }
+    .card-sub { font-size:13px; color:var(--text-dim); margin-bottom:1.5rem; }
+
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+
+    .field label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); margin-bottom:6px; }
+
+    .field input[type="text"], .field input[type="date"] {
+      width:100%; padding:10px 12px;
+      background:var(--bg3); border:1px solid var(--border2);
+      border-radius:var(--radius-sm);
+      font-family:'Syne',sans-serif; font-size:13px; color:var(--text);
+      outline:none; transition:border-color 0.2s, box-shadow 0.2s;
+    }
+    .field input:focus { border-color:var(--cyan); box-shadow:0 0 0 3px var(--cyan-dim); }
+    .field input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(0.5); }
+
+    .drop-zone {
+      border:1.5px dashed var(--border2); border-radius:var(--radius);
+      padding:2.5rem; text-align:center; cursor:pointer;
+      transition:all 0.2s; position:relative; background:var(--bg3);
+    }
+    .drop-zone:hover, .drop-zone.dragging { border-color:var(--cyan); background:var(--cyan-dim); box-shadow:0 0 20px var(--cyan-glow); }
+    .drop-zone input[type="file"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+
+    .drop-icon { width:44px; height:44px; background:var(--bg2); border:1px solid var(--border2); border-radius:12px; margin:0 auto 12px; display:flex; align-items:center; justify-content:center; }
+    .drop-icon svg { width:22px; height:22px; stroke:var(--text-dim); fill:none; }
+    .drop-text { font-size:14px; color:var(--text-dim); font-weight:600; }
+    .drop-text strong { color:var(--cyan); }
+    .drop-hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-family:'Space Mono',monospace; }
+
+    .file-selected { display:none; align-items:center; gap:12px; background:var(--cyan-dim); border:1px solid rgba(0,229,255,0.2); border-radius:var(--radius-sm); padding:10px 14px; margin-top:12px; font-size:13px; }
+    .file-selected.visible { display:flex; }
+    .file-name { font-weight:700; color:var(--cyan); flex:1; font-family:'Space Mono',monospace; font-size:12px; }
+    .file-size { color:var(--text-dim); font-size:12px; }
+
+    .hash-box { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 14px; font-family:'Space Mono',monospace; font-size:11px; color:var(--text-dim); word-break:break-all; margin-top:12px; display:none; }
+    .hash-box.visible { display:block; }
+
+    .btn-primary {
+      width:100%; padding:13px;
+      background:linear-gradient(135deg, var(--cyan), #0080ff);
+      color:#0a0c10; border:none; border-radius:var(--radius-sm);
+      font-family:'Syne',sans-serif; font-size:14px; font-weight:800;
+      cursor:pointer; transition:all 0.2s; margin-top:16px;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      letter-spacing:0.03em; box-shadow:0 4px 20px rgba(0,229,255,0.2);
+    }
+    .btn-primary:hover { transform:translateY(-1px); box-shadow:0 6px 24px rgba(0,229,255,0.35); }
+    .btn-primary:disabled { background:var(--border2); color:var(--text-muted); cursor:not-allowed; transform:none; box-shadow:none; }
+    .btn-verify { background:linear-gradient(135deg, var(--green), #00b894); box-shadow:0 4px 20px rgba(0,255,136,0.2); }
+    .btn-verify:hover { box-shadow:0 6px 24px rgba(0,255,136,0.35); }
+
+    .status { margin-top:16px; padding:14px 16px; border-radius:var(--radius-sm); font-size:13px; display:none; align-items:flex-start; gap:10px; }
+    .status.visible { display:flex; }
+    .status.loading { background:var(--amber-dim); border:1px solid rgba(255,179,0,0.2); color:var(--amber); }
+    .status.success { background:var(--green-dim); border:1px solid rgba(0,255,136,0.2); color:var(--green); }
+    .status.error   { background:var(--red-dim);   border:1px solid rgba(255,69,96,0.2);  color:var(--red); }
+    .status-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+    .status-text { flex:1; }
+    .status-text strong { display:block; font-weight:700; margin-bottom:2px; font-size:13px; }
+    .status-text a { color:inherit; word-break:break-all; text-decoration:underline; }
+
+    .cert-details { margin-top:14px; padding:16px; background:var(--bg3); border:1px solid rgba(0,255,136,0.2); border-radius:var(--radius-sm); font-size:13px; display:none; }
+    .cert-details.visible { display:block; }
+    .cert-details-title { color:var(--green); font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:12px; }
+    .cert-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .cert-field label { font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-muted); font-weight:700; display:block; margin-bottom:3px; }
+    .cert-field span { font-family:'Space Mono',monospace; font-size:12px; color:var(--text); }
+
+    .history-list { display:flex; flex-direction:column; gap:8px; }
+    .history-item { display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius-sm); }
+    .history-badge { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:14px; }
+    .badge-store  { background:var(--cyan-dim);  border:1px solid rgba(0,229,255,0.2); }
+    .badge-verify { background:var(--green-dim); border:1px solid rgba(0,255,136,0.2); }
+    .history-info { flex:1; min-width:0; }
+    .history-action { font-size:13px; font-weight:700; color:var(--text); }
+    .history-hash { font-size:10px; color:var(--text-muted); font-family:'Space Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+    .history-time { font-family:'Space Mono',monospace; font-size:11px; color:var(--text-muted); flex-shrink:0; }
+    .empty-state { text-align:center; padding:3rem; color:var(--text-muted); font-size:13px; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width:16px; height:16px; border:2px solid rgba(10,12,16,0.3); border-top-color:#0a0c10; border-radius:50%; animation:spin 0.7s linear infinite; }
+
+    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+
+    @media (max-width:600px) {
+      .form-grid { grid-template-columns:1fr; }
+      .stats-bar { grid-template-columns:1fr; }
+      .cert-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </div>
+    Cert<span>Verifier</span>
+  </div>
+  <div class="wallet-area">
+    <span class="network-badge" id="networkBadge">Sepolia</span>
+    <button id="connectBtn" onclick="connectWallet()">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Connect Wallet
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Total Stored</div>
+      <div class="stat-value" id="statCount">—</div>
+      <div class="stat-sub">certificates on-chain</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Network</div>
+      <div class="stat-value" style="font-size:16px;padding-top:4px;" id="statNetwork">Not connected</div>
+      <div class="stat-sub">blockchain network</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Session Actions</div>
+      <div class="stat-value" id="statActions">0</div>
+      <div class="stat-sub">this session</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('store')" id="tab-store">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Store Certificate
+    </button>
+    <button class="tab-btn" onclick="switchTab('verify')" id="tab-verify">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Verify Certificate
+    </button>
+    <button class="tab-btn" onclick="switchTab('history')" id="tab-history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+    </button>
+  </div>
+
+  <!-- STORE PANEL -->
+  <div class="panel active" id="panel-store">
+    <div class="card">
+      <div class="card-title">Store a Certificate</div>
+      <div class="card-sub">Upload a certificate file — its SHA-256 hash will be stored permanently on the blockchain.</div>
+      <div class="form-grid">
+        <div class="field"><label>Student Name</label><input type="text" id="studentName" placeholder="e.g. Jane Smith" /></div>
+        <div class="field"><label>Course Name</label><input type="text" id="courseName" placeholder="e.g. BSc Computer Science" /></div>
+        <div class="field"><label>Date Issued</label><input type="date" id="dateIssued" /></div>
+      </div>
+      <div class="drop-zone" id="storeDrop">
+        <input type="file" id="storeFile" accept=".pdf,.png,.jpg,.jpeg" onchange="handleFileSelect('store')" />
+        <div class="drop-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-width="1.5"/><polyline points="14 2 14 8 20 8" stroke-width="1.5"/></svg></div>
+        <div class="drop-text"><strong>Choose file</strong> or drag and drop</div>
+        <div class="drop-hint">PDF, PNG, JPG up to 10MB</div>
+      </div>
+      <div class="file-selected" id="storeFileInfo"><span>📄</span><span class="file-name" id="storeFileName"></span><span class="file-size" id="storeFileSize"></span></div>
+      <div class="hash-box" id="storeHashBox"></div>
+      <button class="btn-primary" onclick="storeCertificate()" id="storeBtn">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Store on Blockchain
+      </button>
+      <div class="status" id="storeStatus"><span class="status-icon"></span><span class="status-text"></span></div>
+    </div>
+  </div>
+
+  <!-- VERIFY PANEL -->
+  <div class="panel" id="panel-verify">
+    <div class="card">
+      <div class="card-title">Verify a Certificate</div>
+      <div class="card-sub">Upload the original certificate file to check if its hash exists on the blockchain.</div>
+      <div class="drop-zone" id="verifyDrop">
+        <input type="file" id="verifyFile" accept=".pdf,.png,.jpg,.jpeg" onchange="handleFileSelect('verify')" />
+        <div class="drop-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" stroke-width="1.5"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke-width="1.5"/></svg></div>
+        <div class="drop-text"><strong>Choose file</strong> or drag and drop</div>
+        <div class="drop-hint">PDF, PNG, JPG — must be the exact original file</div>
+      </div>
+      <div class="file-selected" id="verifyFileInfo"><span>📄</span><span class="file-name" id="verifyFileName"></span><span class="file-size" id="verifyFileSize"></span></div>
+      <div class="hash-box" id="verifyHashBox"></div>
+      <button class="btn-primary btn-verify" onclick="verifyCertificate()" id="verifyBtn">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        Verify Certificate
+      </button>
+      <div class="status" id="verifyStatus"><span class="status-icon"></span><span class="status-text"></span></div>
+      <div class="cert-details" id="certDetails">
+        <div class="cert-details-title">✦ Certificate Details</div>
+        <div class="cert-grid">
+          <div class="cert-field"><label>Student Name</label><span id="detailName">—</span></div>
+          <div class="cert-field"><label>Course</label><span id="detailCourse">—</span></div>
+          <div class="cert-field"><label>Date Issued</label><span id="detailDate">—</span></div>
+          <div class="cert-field"><label>Certificate ID</label><span id="detailId">—</span></div>
+          <div class="cert-field"><label>Issued By</label><span id="detailIssuer">—</span></div>
+          <div class="cert-field"><label>Timestamp</label><span id="detailTime">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORY PANEL -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <div class="card-title">Session History</div>
+      <div class="card-sub">Actions performed during this browser session.</div>
+      <div class="history-list" id="historyList"><div class="empty-state">No actions yet this session.</div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // ⚠️ This is your deployed contract address — update if you redeploy
+  const CONTRACT_ADDRESS = "0x1f1fe5c2DD430022c945144c675F393dDbC1C847";
+
+  // ✅ Full ABI matching the upgraded CertVerifier.sol
+  const ABI = [
+    "function storeCertificate(string studentName, string courseName, string dateIssued, bytes32 documentHash) external returns (uint256)",
+    "function verifyCertificate(bytes32 documentHash) external view returns (bool exists, bool isRevoked, uint256 certId)",
+    "function getCertificate(uint256 certId) external view returns (string,string,string,bytes32,bool,address,uint256)",
+    "function getCertificateCount() external view returns (uint256)",
+    "function revokeCertificate(uint256 certId) external"
+  ];
+
+  const BACKEND = "http://localhost:3001";
+  let userAccount=null, provider=null, signer=null, contract=null;
+  let sessionActions=0, historyLog=[];
+
+  async function connectWallet() {
+    if (!window.ethereum) { alert("MetaMask not found!"); return; }
+    try {
+      const accounts = await window.ethereum.request({ method:"eth_requestAccounts" });
+      userAccount = accounts[0];
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      signer = provider.getSigner();
+      contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      const net = await provider.getNetwork();
+      const netName = net.name==="unknown" ? "Local" : net.name.charAt(0).toUpperCase()+net.name.slice(1);
+      document.getElementById("connectBtn").textContent = "✓ "+userAccount.slice(0,6)+"..."+userAccount.slice(-4);
+      document.getElementById("connectBtn").classList.add("connected");
+      document.getElementById("networkBadge").classList.add("visible");
+      document.getElementById("networkBadge").textContent = netName;
+      document.getElementById("statNetwork").textContent = netName;
+      await refreshCount();
+      window.ethereum.on("accountsChanged", a => { userAccount=a[0]; location.reload(); });
+    } catch(e) { alert("Connection failed: "+e.message); }
+  }
+
+  async function refreshCount() {
+    try {
+      const count = await contract.getCertificateCount();
+      document.getElementById("statCount").textContent = count.toString();
+    } catch { document.getElementById("statCount").textContent = "N/A"; }
+  }
+
+  function switchTab(name) {
+    ["store","verify","history"].forEach(t => {
+      document.getElementById("panel-"+t).classList.toggle("active", t===name);
+      document.getElementById("tab-"+t).classList.toggle("active", t===name);
+    });
+  }
+
+  function handleFileSelect(type) {
+    const file = document.getElementById(type+"File").files[0];
+    if (!file) return;
+    const size = file.size<1024*1024 ? (file.size/1024).toFixed(1)+" KB" : (file.size/1024/1024).toFixed(1)+" MB";
+    document.getElementById(type+"FileName").textContent = file.name;
+    document.getElementById(type+"FileSize").textContent = size;
+    document.getElementById(type+"FileInfo").classList.add("visible");
+    document.getElementById(type+"HashBox").classList.remove("visible");
+    clearStatus(type==="store" ? "storeStatus" : "verifyStatus");
+    if (type==="verify") document.getElementById("certDetails").classList.remove("visible");
+  }
+
+  async function getHash(file) {
+    const fd = new FormData();
+    fd.append("certificate", file);
+    const res = await fetch(BACKEND+"/hash", { method:"POST", body:fd });
+    if (!res.ok) throw new Error("Backend error: "+res.statusText);
+    return (await res.json()).hash;
+  }
+
+  function showStatus(id, type, title, detail) {
+    const el = document.getElementById(id);
+    const icons = { loading:"⏳", success:"✅", error:"❌" };
+    el.className = "status visible "+type;
+    el.querySelector(".status-icon").textContent = icons[type];
+    el.querySelector(".status-text").innerHTML = `<strong>${title}</strong>${detail||""}`;
+  }
+
+  function clearStatus(id) { document.getElementById(id).className="status"; }
+
+  function addHistory(action, hash, success) {
+    historyLog.unshift({ action, hash, success, time:new Date() });
+    sessionActions++;
+    document.getElementById("statActions").textContent = sessionActions;
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const list = document.getElementById("historyList");
+    if (!historyLog.length) { list.innerHTML='<div class="empty-state">No actions yet this session.</div>'; return; }
+    list.innerHTML = historyLog.map(h=>`
+      <div class="history-item">
+        <div class="history-badge ${h.action==="Store"?"badge-store":"badge-verify"}">${h.action==="Store"?"📤":"🔍"}</div>
+        <div class="history-info">
+          <div class="history-action">${h.action} — ${h.success?"Success":"Failed"}</div>
+          <div class="history-hash">${h.hash}</div>
+        </div>
+        <div class="history-time">${h.time.toLocaleTimeString()}</div>
+      </div>`).join("");
+  }
+
+  async function storeCertificate() {
+    const file = document.getElementById("storeFile").files[0];
+    const studentName = document.getElementById("studentName").value.trim();
+    const courseName  = document.getElementById("courseName").value.trim();
+    const dateIssued  = document.getElementById("dateIssued").value;
+    if (!file) { showStatus("storeStatus","error","No file selected","Please choose a certificate file."); return; }
+    if (!studentName||!courseName||!dateIssued) { showStatus("storeStatus","error","Missing fields","Please fill in all fields above."); return; }
+    if (!contract) { showStatus("storeStatus","error","Wallet not connected","Click 'Connect Wallet' first."); return; }
+
+    const btn = document.getElementById("storeBtn");
+    btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Processing...';
+    try {
+      showStatus("storeStatus","loading","Getting hash from backend…","Hashing your file with SHA-256.");
+      const hash = await getHash(file);
+      document.getElementById("storeHashBox").textContent = "SHA-256: "+hash;
+      document.getElementById("storeHashBox").classList.add("visible");
+      showStatus("storeStatus","loading","Sending to blockchain…","Please confirm the transaction in MetaMask.");
+      const tx = await contract.storeCertificate(studentName, courseName, dateIssued, hash);
+      showStatus("storeStatus","loading","Transaction submitted…","Waiting for confirmation. This may take 15–30 seconds.");
+      await tx.wait();
+      showStatus("storeStatus","success","Certificate stored!",`TX: <a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,22)}…</a>`);
+      addHistory("Store", hash, true);
+      await refreshCount();
+    } catch(e) {
+      showStatus("storeStatus","error","Transaction failed", e.reason||e.data?.message||e.message||"Unknown error");
+      addHistory("Store","—",false);
+    }
+    btn.disabled=false;
+    btn.innerHTML=`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Store on Blockchain`;
+  }
+
+  async function verifyCertificate() {
+    const file = document.getElementById("verifyFile").files[0];
+    if (!file)    { showStatus("verifyStatus","error","No file selected","Please choose a certificate file."); return; }
+    if (!contract){ showStatus("verifyStatus","error","Wallet not connected","Click 'Connect Wallet' first."); return; }
+
+    const btn = document.getElementById("verifyBtn");
+    btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Verifying...';
+    document.getElementById("certDetails").classList.remove("visible");
+    try {
+      showStatus("verifyStatus","loading","Hashing file…","Computing SHA-256 via backend.");
+      const hash = await getHash(file);
+      document.getElementById("verifyHashBox").textContent = "SHA-256: "+hash;
+      document.getElementById("verifyHashBox").classList.add("visible");
+      showStatus("verifyStatus","loading","Checking blockchain…","Reading from smart contract.");
+      const [exists, isRevoked, certId] = await contract.verifyCertificate(hash);
+      if (!exists) {
+        showStatus("verifyStatus","error","Not found","This certificate has no record on the blockchain.");
+        addHistory("Verify", hash, false);
+      } else if (isRevoked) {
+        showStatus("verifyStatus","error","Certificate revoked",`Cert ID #${certId} exists but has been revoked.`);
+        addHistory("Verify", hash, false);
+      } else {
+        showStatus("verifyStatus","success","Certificate verified!",`Valid certificate — ID #${certId} on-chain.`);
+        addHistory("Verify", hash, true);
+        await loadCertDetails(certId);
+      }
+    } catch(e) {
+      showStatus("verifyStatus","error","Error", e.message);
+      addHistory("Verify","—",false);
+    }
+    btn.disabled=false;
+    btn.innerHTML=`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Verify Certificate`;
+  }
+
+  async function loadCertDetails(certId) {
+    try {
+      const [name, course, date,,, issuer, timestamp] = await contract.getCertificate(certId);
+      document.getElementById("detailName").textContent   = name;
+      document.getElementById("detailCourse").textContent = course;
+      document.getElementById("detailDate").textContent   = date;
+      document.getElementById("detailId").textContent     = "#"+certId.toString();
+      document.getElementById("detailIssuer").textContent = issuer.slice(0,8)+"..."+issuer.slice(-6);
+      document.getElementById("detailTime").textContent   = new Date(timestamp.toNumber()*1000).toLocaleString();
+      document.getElementById("certDetails").classList.add("visible");
+    } catch(e) { console.error("Could not load cert details:", e); }
+  }
+</script>
+</body>
+</html>
